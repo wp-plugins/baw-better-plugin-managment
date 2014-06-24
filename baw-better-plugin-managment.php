@@ -228,7 +228,7 @@ function bawbpm_add_class_BAW_Plugins_List_Table() {
 					update_option( 'recently_deleted', $recently_deleted );
 				}
 			}
-			foreach ( $recently_deleted as $plugin_file => $plugin_data ) {
+			foreach ( (array) $recently_deleted as $plugin_file => $plugin_data ) {
 				if ( ! function_exists( 'plugins_api' ) ) {
 					require ABSPATH . '/wp-admin/includes/plugin-install.php';
 				}
