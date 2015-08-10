@@ -62,7 +62,7 @@ function bawbpm_pre_set_transient_plugins_delete_result_user( $value ) {
 	return $value;
 }
 
-add_action( 'admin_head-plugins.php', 'bawbpm_add_class_BAW_Plugins_List_Table' );
+// add_action( 'admin_head-plugins.php', 'bawbpm_add_class_BAW_Plugins_List_Table' );
 function bawbpm_add_class_BAW_Plugins_List_Table() {
 
 	class BAW_Plugins_List_Table extends WP_Plugins_List_Table {
@@ -169,6 +169,8 @@ function bawbpm_add_class_BAW_Plugins_List_Table() {
 				update_option( 'recently_activated', $recently_activated );
 			}
 
+			$plugin_info = get_site_transient( 'update_plugins' );
+
 			if ( ! $screen->in_admin( 'network' ) ) {
 				$recently_updated = get_option( 'recently_updated', array() );
 
@@ -192,6 +194,21 @@ function bawbpm_add_class_BAW_Plugins_List_Table() {
 			}
 
 			foreach ( (array) $plugins['all'] as $plugin_file => $plugin_data ) {
+				// Extra info if known. array_merge() ensures $plugin_data has precedence if keys collide.
+				if ( isset( $plugin_info->response[ $plugin_file ] ) ) {
+					$plugins['all'][ $plugin_file ] = $plugin_data = array_merge( (array) $plugin_info->response[ $plugin_file ], $plugin_data );
+					// Make sure that $plugins['upgrade'] also receives the extra info since it is used on ?plugin_status=upgrade
+					if ( isset( $plugins['upgrade'][ $plugin_file ] ) ) {
+						$plugins['upgrade'][ $plugin_file ] = $plugin_data = array_merge( (array) $plugin_info->response[ $plugin_file ], $plugin_data );
+					}
+
+				} elseif ( isset( $plugin_info->no_update[ $plugin_file ] ) ) {
+					$plugins['all'][ $plugin_file ] = $plugin_data = array_merge( (array) $plugin_info->no_update[ $plugin_file ], $plugin_data );
+					// Make sure that $plugins['upgrade'] also receives the extra info since it is used on ?plugin_status=upgrade
+					if ( isset( $plugins['upgrade'][ $plugin_file ] ) ) {
+						$plugins['upgrade'][ $plugin_file ] = $plugin_data = array_merge( (array) $plugin_info->no_update[ $plugin_file ], $plugin_data );
+					}
+				}				
 				// Filter into individual sections
 				if ( is_multisite() && ! $screen->in_admin( 'network' ) && is_network_only_plugin( $plugin_file ) && ! is_plugin_active( $plugin_file ) ) {
 					// On the non-network screen, filter out network-only plugins as long as they're not individually activated
@@ -234,7 +251,7 @@ function bawbpm_add_class_BAW_Plugins_List_Table() {
 				}
 				$api = plugins_api( 'plugin_information', array( 'slug' => dirname( $plugin_file ) ) );
 				if ( $api ) {
-					$data = array( 	'Name' => $api->name, 
+					$_data = array( 	'Name' => $api->name, 
 									'PluginURI' => 'https://wordpress.org/plugins/' . dirname( $plugin_file ) . '/',
 									'Version' => $api->version,
 									'Description' => substr( preg_replace( '/(\S)\1{3,}/', '', strip_tags( $api->sections['description'] ) ), 0, 120 ) . '...',
@@ -244,9 +261,9 @@ function bawbpm_add_class_BAW_Plugins_List_Table() {
 
 								);
 				} else {
-					$data = array( 'Name' => dirname( $plugin_file ), 'WPRepo' => false );
+					$_data = array( 'Name' => dirname( $plugin_file ), 'WPRepo' => false );
 				}
-				$plugins['recently_deleted'][ $plugin_file ] = $data;
+				$plugins['recently_deleted'][ $plugin_file ] = $_data;
 			}
 			if ( $s ) {
 				$status = 'search';
@@ -270,12 +287,15 @@ function bawbpm_add_class_BAW_Plugins_List_Table() {
 
 			$total_this_page = $totals[ $status ];
 
-			if ( $orderby ) {
+			if ( ! $orderby ) {
+				$orderby = 'Name';
+			} else {
 				$orderby = ucfirst( $orderby );
-				$order = strtoupper( $order );
-
-				uasort( $this->items, array( $this, '_order_callback' ) );
 			}
+
+			$order = strtoupper( $order );
+
+			uasort( $this->items, array( $this, '_order_callback' ) );
 
 			$plugins_per_page = $this->get_items_per_page( str_replace( '-', '_', $screen->id . '_per_page' ), 999 );
 
